@@ -22,6 +22,10 @@ plotClusters:               3-d scatter plot to visualize clusters
 randomRGB:                  Compute random RBG values for colors
 Erzsol3ToMultipleHdf5:      write single hdf5 outputs of the erzol outputs
 
+Written by Nicolas Vinard, 2019
+
+v0.1
+
 """
 
 import numpy as np
