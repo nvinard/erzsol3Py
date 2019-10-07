@@ -31,6 +31,7 @@ import pandas
 import random
 from os import listdir
 from os.path import isfile, join
+from typing import Tuple
 
 
 
@@ -38,7 +39,7 @@ from os.path import isfile, join
 # FUNCTION USED TO CREATE ERZSOL3 INPUTS
 #########################################################
 
-def model2Erzsol3mod(csv_file_model, erzsol_mod_file):
+def model2Erzsol3mod(csv_file_model: str, erzsol_mod_file: str):
 
     '''
     model2Erzsol3mod(csv_file_model, erzsol_mod_file)
@@ -49,10 +50,16 @@ def model2Erzsol3mod(csv_file_model, erzsol_mod_file):
     that I used for my CNN application. However, it can easily be changed
     for other purposes and to include S-velocities.
 
-    Inputs: csv_file_model, a csv file containing the P-velocities and depth information
-            erzsol_mod_file, string name of the output file ending with .mod
+    Parameters
+    ----------
+    csv_file_model: str
+        The path to the csv file containing the P-velocities and depth information
+    erzsol_mod_file: str
+        The name of the output file ending with .mod
 
-    Output: erzsol_mod_file
+    Returns
+    -------
+    Writes the erzsol_mod_file
 
     '''
 
@@ -89,7 +96,7 @@ def model2Erzsol3mod(csv_file_model, erzsol_mod_file):
     file.close()
 
 
-def write2dst(receiver_file, model_file, source_coord, dst_file):
+def write2dst(receiver_file: str, model_file: str, source_coord: np.ndarray, dst_file: str):
 
     '''
     write2dst(receiver_file, model_file, source_coord, dst_file)
@@ -97,12 +104,20 @@ def write2dst(receiver_file, model_file, source_coord, dst_file):
     This function writes the .dst file containing the range and azimuth
     of each receiver to the source. Strictly for the texas data at the moment
 
-    Inputs: receiver_file csv file with receicer information
-            model_file csv file about the model
-            source_coord, np array with source coordinates
-            dst_file, name of output dst file
+    Parameters
+    ----------
+    receiver_file: str
+        csv file with receicer information
+    model_file: str
+        csv file about the model
+    source_coord: np.ndarray of shape (1,3)
+        cartesian source coordinates in meters
+    dst_file: str
+        name of output dst file
 
-    Returns: the .dst file
+    Returns
+    -------
+    Writes dst_file
 
     '''
 
@@ -153,7 +168,7 @@ def write2dst(receiver_file, model_file, source_coord, dst_file):
 
     file.close()
 
-def write_dst2cmd(cmd_file, dst_file, zs):
+def write_dst2cmd(cmd_file: str, dst_file: str, zs: float):
 
     """
     write_dst2cmd(cmd_file, dst_file, zs)
@@ -161,9 +176,18 @@ def write_dst2cmd(cmd_file, dst_file, zs):
     This function writes the path to the dst_file to and the source depth
     to the cmd file.
 
-    Inputs: cmd_file, Path to cmd file, string
-            dst_file, Path to dst file, string
-            zs, source depth in km
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file
+    dst_file: str
+        Path to dst file
+    zs: float
+        cartesian source depth in km
+
+    Returns
+    -------
+    Writes dst_file
 
     """
     file=open(cmd_file,'r')
@@ -178,7 +202,7 @@ def write_dst2cmd(cmd_file, dst_file, zs):
     file.write('\n'.join(lines))
     file.close()
 
-def MT_components(strike, dip, rake, M0):
+def MT_components(strike_dip_rake_M0: np.ndarray) -> np.ndarray:
 
     """
     MT_components(strike, dip, rake, M0)
@@ -186,10 +210,22 @@ def MT_components(strike, dip, rake, M0):
     This function writes computes the full moment tensor given the strike,
     dip, rake and source moment
 
-    Inputs: strike, dip and rake in degrees, M0 (scalar seismic moment)
+    Parameters
+    ----------
+    strike_dip_rake_M0: np.ndarray of shape (1,4):
+        contains strike, dip, rake and scalar seismic moment in that order
 
-    Returns: MT, moment tensor
+    Returns
+    -------
+    MT: np.ndarray of shape (3,3)
+        Full seismic moment tensor
+
     """
+
+    strike = strike_dip_rake_M0[0,0]
+    dip = strike_dip_rake_M0[0,1]
+    rake = strike_dip_rake_M0[0,2]
+    M0 = strike_dip_rake_M0[0,3]
 
     M11= -M0*(np.sin(math.radians(dip))*np.cos(math.radians(rake))*np.sin(2*math.radians(strike))
               + np.sin(2*math.radians(dip))*np.sin(math.radians(rake))*(np.sin(math.radians(strike)))**2)
@@ -216,15 +252,24 @@ def MT_components(strike, dip, rake, M0):
 
     return MT
 
-def write_mod2cmd(cmd_file, mod_file):
+def write_mod2cmd(cmd_file: str, mod_file: str):
 
     """
     write_mod2cmd(cmd_file, mod_file)
 
     This function writes the model file to the cmd file
 
-    Input:  cmd_file, Path to cmd file (string)
-            mod_file, Patht to model file (string)
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file
+    mod_file: str
+        Path to model file
+
+    Returns
+    -------
+    Modified cmd_file including path to model file
+
     """
 
     file = open(cmd_file, 'r')
@@ -236,15 +281,23 @@ def write_mod2cmd(cmd_file, mod_file):
     file.write('\n'.join(lines))
     file.close()
 
-def writeMT2cmd(cmd_file, MT):
+def writeMT2cmd(cmd_file: str, MT: np.ndarray):
 
     """
     writeMT2cmd(cmd_file, MT)
 
     This function writes the MT to the cmd file
 
-    Inputs: cmd_file, Path to cmd_file (string)
-            MT, the moment tensor
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file
+    MT: np.ndarray of shape (3,3)
+        Full seimsic moment tensor
+
+    Returns
+    -------
+    Modified cmd_file including MT
 
     """
 
@@ -263,7 +316,7 @@ def writeMT2cmd(cmd_file, MT):
     file.close()
 
 
-def writeErzsolOut2cmd(cmd_file, erzsol_seismo_out):
+def writeErzsolOut2cmd(cmd_file: str, erzsol_seismo_out: str):
 
     """
     writeSeisOut2cmd(cmd_file, seisOut)
@@ -271,8 +324,16 @@ def writeErzsolOut2cmd(cmd_file, erzsol_seismo_out):
     This function writes the Path to the erzsol seimogram output to the
     cmd file.
 
-    Inputs: cmd_file, Path to cmd_file, string
-            erzsol_seismo_out, Path/name of erzsol output, string
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file
+    erzsol_seismo_out: str
+        Path/name of erzsol3 output file
+
+    Returns
+    -------
+    Modified cmd_file including path to erzsol3 output file
 
     """
     file = open(cmd_file, 'r')
@@ -285,25 +346,39 @@ def writeErzsolOut2cmd(cmd_file, erzsol_seismo_out):
 
 
 
-def write_betaInfo2cmd(cmd_file, sdrm, source_coord, clusterID):
+def write_betaInfo2cmd(
+    cmd_file: str,
+    strike_dip_rake_M0: np.ndarray,
+    source_coord: np.ndarray,
+    clusterID: np.ndarray):
 
     """
-    write_betaInfo2cmd(cmd_file, sdrm, source_coord, clusterID)
+    write_betaInfo2cmd(cmd_file, strike_dip_rake_M0, source_coord, clusterID)
 
     This function writes additional beta information to the end of the
     cmd file.
 
-    Inputs: cmd_file, Path to cmd file (string)
-            sdrm, Physical parameters of the source, i.e. strike, dip, rake
-                  and seismic moment (np.array)
-            source_coord, cartesian coordinates of the source  (np.array)
-            clusterID, one_hot_vector used for CNN (np.array)
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file
+    strike_dip_rake_M0: np.ndarray of shape (1,4)
+        contains strike, dip, rake and scalar seismic moment in that order
+    source_coord: np.ndarray of shape (1,3)
+        cartesian source coordinates in meters
+    clusterID: np.ndarray of shape (1,number_of_clusters)
+        The one hot vector used for to refer to the cluster.
+
+    Returns
+    -------
+    Modified cmd_file including strike, dipe rake and seismic moment,
+    the cartesian source coorindates and the one_hot_vector
 
     """
 
     file = open(cmd_file, 'a')
     file.write('\n\n# strike, dip, rake and seismic moment\n')
-    np.savetxt(file, sdrm, delimiter=' ', fmt='%.0f')
+    np.savetxt(file, strike_dip_rake_M0, delimiter=' ', fmt='%.0f')
     file.write('\n# Cartesian source coordinates\n')
     np.savetxt(file, source_coord, delimiter=' ', fmt='%.0f')
     file.write('\n# cluster ID vector\n')
@@ -311,7 +386,10 @@ def write_betaInfo2cmd(cmd_file, sdrm, source_coord, clusterID):
 
     file.close()
 
-def cart2polar(cart_receivers, cart_source):
+def cart2polar(
+    cart_receivers: np.ndarray,
+    cart_source: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
 
     """
     range, azimuth = cart2polar(cart_receivers, cart_source)
@@ -319,13 +397,23 @@ def cart2polar(cart_receivers, cart_source):
     This function takes in cartesian coordinates of source and receivers
     and returns the distance (range) and azimuth
 
+    Parameters
+    ----------
+    cart_receivers: np.ndarray of shape (3, number_of_receivers)
+        Cartesian coordinates of all receivers
+    cart_source: np.ndarray of shape (1,3)
+        Cartesian source coordinate
     Inputs:
             cart_receivers, cartesian receiver coordinates (np.array)
             cart_source, cartesian source coordinates (np.array)
 
-    Returns:
-            range: all ranges (np.array)
-            azimuth: all azimuths (np.array)
+    Returns
+    -------
+    ranges: np.ndarray of shape (number_of_receivers,)
+        The source receivers distances/range
+    azimuth: np.ndarray of shape (number_of_receivers,)
+        The azimuths of all receivers to the source
+
     """
 
     ranges = np.zeros(cart_receivers.shape[1])
@@ -345,28 +433,39 @@ def cart2polar(cart_receivers, cart_source):
 # AND TO READ HDF5
 #########################################################
 
-def Erzsol3Tohdf5(erz_folder, cmd_folder, h5_folder, h5_name, n_clusters, ns, n_train=None):
+def Erzsol3Tohdf5(
+    erz_folder: str,
+    cmd_folder: str,
+    h5_folder: str,
+    h5_name: str,
+    n_clusters: int,
+    ns: int):
 
-    '''
+    """
     This function writes out a single hdf5 file containing all information
     and the data that can be used for Machine learning and other
 
-    Inputs:
-            erz_folder: Path to folder containing all erzsol data outputs
-            cmd_folder: Path to folder containing all erzsol inputs
-            h5_folder: Path to folder in whcih to store the h5 file
-            h5_name: Name of hdf5 file
-            n_clusters: How many cluster regions are there, int
-            n_train: Amount of training data to create. If not defined everything
-                     written to test data
-            ns: number of time samples per trace (int)
-            n_test: Amount of test data to create. If is not defined everything
-                    written to test data
+    Parameters
+    ----------
+    erz_folder: str
+        Path to folder containing all erzsol data outputs
+    cmd_folder: str
+        Path to folder containing all erzsol inputs
+    h5_folder: str
+        Path to folder in whcih to store the h5 file
+    h5_name: str
+        Name of hdf5 file
+    n_clusters: int
+        Number of clusters
+    ns: int
+        Number of time samples per trace (should be equal for all traces)
 
-    Output:
-            hdf5 file
 
-    '''
+    Returns
+    -------
+    Writes the hdf5 file to h5_folder/h5_name
+
+    """
 
     #erzFiles = [f for f in listdir(erz_folder) if isfile(join(erz_folder, f))]
     #erzFiles = [f for f in listdir(erz_folder) if f!='.DS_Store' if isfile(join(erz_folder, f))]
@@ -464,20 +563,24 @@ def Erzsol3Tohdf5(erz_folder, cmd_folder, h5_folder, h5_name, n_clusters, ns, n_
         hf.create_dataset('cluster IDs', data=one_hot_vectors)
         hf.create_dataset('ML array', data=data_matrix, dtype='f')
 
-    return None
 
-def readingHdf5(filename):
+
+def readingHdf5(filename: str) -> np.ndarray:
 
     """
-    readingHdf5(filename)
+    dataZ = readingHdf5(filename)
 
     This function reads an hdf5 file and returns the data
 
-    Inputs:
-            filename, hdf5 file (string)
+    Parameters
+    ----------
+    filenameL: str
+        hdf5 file
 
-    Returns:
-            dataZ, vertical component data (np.array)
+    Returns
+    -------
+    dataZ: np.ndarray
+        The vertical component data
     """
 
     f = h5py.File(filename, 'r')
@@ -515,9 +618,75 @@ def readingHdf5(filename):
 
     return dataZ #dataR, dataZ, dataT
 
+def compute_random_source_locations_per_cluster(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    zs: np.ndarray,
+    n_sources_per_cluster: int
+    ) -> np.ndarray:
+
+    """
+
+    clusters = compute_random_source_locations_per_cluster(xs, ys, zs, n_sources_per_cluster)
+
+    This function computes random source locations for all the clusters.
+
+    Example
+    xMin = 6800, xMax = 7800
+    dxC = 90 # spatial x-distance of single cluster
+    dx = 10 # remaining distance to reach next cluster
+    xs = np.zeros((nx,2))
+    for i in range(0,nx):
+        xs[i,:] = np.array([x1+i*(dxC+dx), x1+i*(dxC+dx)+dxC])
+
+    Parameters
+    ----------
+    xs: np.ndarray of shape (spatial clusters in x, 2)
+        Contains the xmin and xmax ranges in all x-directions
+    ys: np.ndarray of shape (spatial clusters in y, 2)
+        Contains the ymin and ymax ranges in all y-directions
+    zs: np.ndarray of shape (spatial clusters in z, 2)
+        Contains the zmin and zmax ranges in all z-directions
+
+    Returns
+    -------
+    clusters: np.ndarray of shape (number_of_clusters, 3)
+        The cartesian coordinates of all the sources for all clusters
+
+    """
+    n_clusters = xs.shape[0]*ys.shape[0]*zs.shape[0]
+
+    # Define random locations of sources within each cluster and assign to one variable
+
+    clusters = np.zeros((n_sources_per_cluster*n_clusters,3))
 
 
-def points_in_cube(pt1, pt2, pt3):
+    # Create n_sources_per_cluster random source locations within each cluster
+    c = 0 # Set counter to zero
+    for iz in range(0,zs.shape[0]):
+
+        for iy in range(0,ys.shape[0]):
+
+            for ix in range(0,xs.shape[0]):
+
+                pt1 = (xs[ix,0], xs[ix,1])
+                pt2 = (ys[iy,0], ys[iy,1])
+                pt3 = (zs[iz,0], zs[iz,1])
+
+                # Compute n_sources_per_cluster of random source location in each cluster
+                points = [points_in_cube(pt1, pt2, pt3) for _ in range(n_sources_per_cluster)]
+                xs_nsou, ys_nsou, zs_nsou = zip(*points)
+
+                clusters[c*n_sources_per_cluster:(c+1)*n_sources_per_cluster,0] = np.array(xs_nsou)
+                clusters[c*n_sources_per_cluster:(c+1)*n_sources_per_cluster,1] = np.array(ys_nsou)
+                clusters[c*n_sources_per_cluster:(c+1)*n_sources_per_cluster,2] = np.array(zs_nsou)
+
+                c+=1 # Update counter
+
+    return clusters
+
+
+def points_in_cube(pt1: tuple, pt2:tuple, pt3:tuple)->tuple:
 
     """
     points_in_cube(pt1, pt2, pt3)
@@ -525,12 +694,18 @@ def points_in_cube(pt1, pt2, pt3):
     This function computes random locations in cartesian coordinates between
     the x,y,z ranges defined by pt1, pt2 and pt3, respectively
 
-    Inputs:
-            pt1: np.array([xmin, xmax])
-            pt1: np.array([ymin, ymax])
-            pt1: np.array([zmin, zmax])
+    Parameters
+    ----------
+    pt1: tuple
+        (xmin, xmax)
+    pt2: tuple
+        (ymin, ymax)
+    pt3: tuple
+        (zmin, zmax)
+
     Returns
-            Random location between min max
+    -------
+    Tuple (x_random, y_random, z_random) between min max values
     """
     return (random.randrange(pt1[0], pt1[1]+1, 1),random.randrange(pt2[0], pt2[1]+1, 1), random.randrange(pt3[0], pt3[1]+1, 1))
 
@@ -538,18 +713,25 @@ def points_in_cube(pt1, pt2, pt3):
 ###################################################
 # FUNCTIONS FOR PLOTTING
 ###################################################
-def plotClusters(clusters, n_clusters, n_sou):
+def plotClusters(clusters: np.ndarray, n_clusters: int, n_sou: int):
 
     '''
 
     plotClusters generates a 3-D scatter plot and colors the clusters
-    with random colors in order to discern them
+    with random colors in order to distinguish the clusters
 
-    Inputs: clusters, np array of all source locations
-            n_clusters, int number of clusters
-            n_sou, int number of sources per cluster
+    Parameters
+    ----------
+    clusters: np.ndarray
+        All source locations
+    n_clusters: int
+        Number of clusters
+    n_sou: int
+        Number of sources per cluster
 
-    Returns: 3-D scatter plot
+    Returns
+    -------
+    3-D scatter plot
 
     '''
 
@@ -577,18 +759,24 @@ def randomRGB():
 ###################################################
 # UNUSED/RARELY USED FUNCTIONS
 ###################################################
-def Erzsol3ToMultipleHdf5(erz_folder, cmd_folder, h5_folder):
+def Erzsol3ToMultipleHdf5(erz_folder: str, cmd_folder: str, h5_folder: str):
 
     '''
     This function writes out a single hdf5 database for each erzsol seimsogram
     output contained in the output folder
 
-    Inputs:
-            erz_folder: Path to folder containing all erzsol data outputs
-            cmd_folder: Path to folder containing all erzsol cmd inputs
-            h5_folder: Path to folder in whcih to store the h5 file
+    Parameters
+    ----------
+    erz_folder: str
+        Path to folder containing all erzsol data outputs
+    cmd_folder: str
+        Path to folder containing all erzsol cmd inputs
+    h5_folder: str
+        Path to folder in whcih to store the h5 file
 
-    Output: hdf5 file
+    Returns
+    -------
+    hdf5 file
 
 
     '''
@@ -684,20 +872,27 @@ def Erzsol3ToMultipleHdf5(erz_folder, cmd_folder, h5_folder):
             hf.create_dataset('source location', data=sou_coordinates, dtype='int32')
             hf.create_dataset('data', data=data_matrix, dtype='f')
 
-    return None
 
 
-def write_betaInfo2cmdSingle(cmd_file, sdrm, source_coord):
+def write_betaInfo2cmdSingle(cmd_file: str, sdrm: np.ndarray, source_coord: np.ndarray):
 
     """
     write_betaInfo2cmdSingle(cmd_file, sdrm, source_coord)
 
     This function writes beta information to the end of the cmd file
 
-    Inputs:
-            cmd_file, Patht to cmd file (string)
-            sdrm, strike dip rake and source moment (np.array)
-            source_coord, cartesian coordinates (np.array)
+    Parameters
+    ----------
+    cmd_file: str
+        Path to cmd file (string)
+    sdrm: np.ndarray of shape (1,4)
+        contains strike, dip, rake and scalar seismic moment in that order
+    source_coord: np.ndarray (1,3)
+        Cartesian source coordinates
+
+    Returns
+    -------
+    Changed cmd_file to include beta info
     """
 
     file = open(cmd_file, 'a')
