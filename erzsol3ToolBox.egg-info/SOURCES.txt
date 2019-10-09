@@ -1,0 +1,8 @@
+README.md
+setup.py
+erzsol3ToolBox/__init__.py
+erzsol3ToolBox/erzsol3Py.py
+erzsol3ToolBox.egg-info/PKG-INFO
+erzsol3ToolBox.egg-info/SOURCES.txt
+erzsol3ToolBox.egg-info/dependency_links.txt
+erzsol3ToolBox.egg-info/top_level.txt

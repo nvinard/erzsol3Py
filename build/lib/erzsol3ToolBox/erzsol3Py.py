@@ -471,9 +471,7 @@ def Erzsol3Tohdf5(
 
     """
 
-    #erzFiles = [f for f in listdir(erz_folder) if isfile(join(erz_folder, f))]
-    #erzFiles = [f for f in listdir(erz_folder) if f!='.DS_Store' if isfile(join(erz_folder, f))]
-    erzFiles = [f for f in listdir(erz_folder) if f=='.tx.z' if isfile(join(erz_folder, f))]
+    erzFiles = [f for f in listdir(erz_folder) if f.endswith(".tx.z") if isfile(join(erz_folder, f))]
 
     filenameH5Output = h5_folder  +'/' + h5_name + '.h5'
 
@@ -485,6 +483,15 @@ def Erzsol3Tohdf5(
     azimuths = np.zeros((n_examples, 1))
     ranges = np.zeros((n_examples, 1))
 
+
+    ncomp = 0
+    # Read single file to get number of receivers to initialize data_matrix
+    f = open(join(erz_folder,erzFiles[0]), 'rb')
+    k = 4
+    f.seek(k)
+    nt = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
+    data_matrix = np.zeros((n_examples, nt, ns))
+    f.close()
 
     # Begin loop over all the input files
     for i, ef in enumerate(erzFiles):
@@ -499,7 +506,7 @@ def Erzsol3Tohdf5(
 
         sou_physics[i,:] = np.fromstring(lines[28], dtype='int', sep=' ')
         sou_coordinates[i,:] = np.fromstring(lines[31], dtype='int', sep=' ')
-        one_hot_vectors[i,:] = np.fromstring(lines[34], dtype='float32', sep=' ')
+        one_hot_vectors[i,:] = np.fromstring(lines[34], dtype='int', sep=' ')
 
         # First part information about number of receivers and components per receiver
         k = 4
@@ -544,9 +551,6 @@ def Erzsol3Tohdf5(
                 k+=num_bytes[8]
                 f.seek(k)
 
-                if i == 0 and i_r==0 and j==0:
-                    data_matrix = np.zeros((n_examples, n_rec, ns))
-
                 # Only interested in the first component (the vertical component)
                 if j == 0:
                     data_matrix[i, i_r, :] = np.fromfile(f, dtype='float32',count=ns)
@@ -554,14 +558,16 @@ def Erzsol3Tohdf5(
                 k+=num_bytes[9]
                 k+=num_bytes[10]
 
+        nt = n_rec
+        ncomp = n_comp
         f.close()
 
     with h5py.File(filenameH5Output, 'w') as hf:
 
         # Create group and attributes
         g = hf.create_group('Texas synthetic data')
-        g.attrs['number of receivers'] = n_rec
-        g.attrs['number of components'] = n_comp
+        g.attrs['number of receivers'] = nt
+        g.attrs['number of components'] = ncomp
         hf.create_dataset('stike, dip, rake, M0', data=sou_physics, dtype='int32')
         hf.create_dataset('source location', data=sou_coordinates, dtype='int32')
         hf.create_dataset('cluster IDs', data=one_hot_vectors)
