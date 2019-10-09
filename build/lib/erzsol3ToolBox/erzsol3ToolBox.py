@@ -499,7 +499,7 @@ def Erzsol3Tohdf5(
 
         sou_physics[i,:] = np.fromstring(lines[28], dtype='int', sep=' ')
         sou_coordinates[i,:] = np.fromstring(lines[31], dtype='int', sep=' ')
-        one_hot_vectors[i,:] = np.fromstring(lines[34], dtype='float32', sep=' ')
+        one_hot_vectors[i,:] = np.fromstring(lines[34], dtype='int', sep=' ')
 
         # First part information about number of receivers and components per receiver
         k = 4
