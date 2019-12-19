@@ -26,6 +26,8 @@ Written by Nicolas Vinard, 2019
 
 v0.1
 
+Todo: Extend to write tfrecords
+
 """
 
 import numpy as np
@@ -36,6 +38,8 @@ import random
 from os import listdir
 from os.path import isfile, join
 from typing import Tuple
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 
@@ -127,7 +131,6 @@ def write2dst(receiver_file: str, model_file: str, source_coord: np.ndarray, dst
 
     model = pandas.read_csv(model_file)
     depth_m = model['Depth'].values
-    depth_model = depth_m + np.abs(min(depth_m))
 
     receiver_info = pandas.read_csv(receiver_file)
     easting = receiver_info['Easting'].values
@@ -197,7 +200,7 @@ def write_dst2cmd(cmd_file: str, dst_file: str, zs: float):
     file=open(cmd_file,'r')
     lines=file.read().splitlines()
 
-    lines[20] = '   {:.1f}                                  Depth of source'.format(zs)
+    lines[20] = '   {:.4f}                                  Depth of source'.format(zs)
     lines[21] = '"{}"                                    Range and azimuth file'.format(dst_file)
 
     file.close()
@@ -285,7 +288,7 @@ def write_mod2cmd(cmd_file: str, mod_file: str):
     file.write('\n'.join(lines))
     file.close()
 
-def writeMT2cmd(cmd_file: str, MT: np.ndarray):
+def writeMT2cmd(cmd_file: str, MT: np.ndarray, dom_freq: float):
 
     """
     writeMT2cmd(cmd_file, MT)
@@ -309,6 +312,7 @@ def writeMT2cmd(cmd_file: str, MT: np.ndarray):
 
     lines = file.read().splitlines()
 
+    lines[16] = '   {:.1f}                                  Dominant frequency      [RI]'.format(dom_freq)
     lines[17] = '    {:.2f}      {:.2f}       {:.2f}            Moment tensor Components'.format(MT[0,0],MT[0,1],MT[0,2])
     lines[18] = '    {:.2f}      {:.2f}       {:.2f}'.format(MT[1,0],MT[1,1],MT[1,2])
     lines[19] = '    {:.2f}      {:.2f}       {:.2f}'.format(MT[2,0],MT[2,1],MT[2,2])
@@ -323,7 +327,7 @@ def writeMT2cmd(cmd_file: str, MT: np.ndarray):
 def writeErzsolOut2cmd(cmd_file: str, erzsol_seismo_out: str):
 
     """
-    writeSeisOut2cmd(cmd_file, seisOut)
+    writeErzsolOut2cmd(cmd_file, seisOut)
 
     This function writes the Path to the erzsol seimogram output to the
     cmd file.
@@ -426,7 +430,7 @@ def cart2polar(
     for i in range(cart_receivers.shape[1]):
 
         ranges[i] = np.sqrt(np.sum((cart_source - cart_receivers[:,i])**2))
-        azimuth[i] = np.rad2deg(np.arctan2(cart_receivers[1,i]-cart_source[0,1], cart_receivers[0,i]-cart_source[0,0]))
+        azimuth[i] = np.rad2deg(np.arctan2(cart_receivers[0,i]-cart_source[0,0], cart_receivers[1,i]-cart_source[0,1]))
 
     return ranges, azimuth
 
@@ -471,9 +475,7 @@ def Erzsol3Tohdf5(
 
     """
 
-    #erzFiles = [f for f in listdir(erz_folder) if isfile(join(erz_folder, f))]
-    #erzFiles = [f for f in listdir(erz_folder) if f!='.DS_Store' if isfile(join(erz_folder, f))]
-    erzFiles = [f for f in listdir(erz_folder) if f=='.tx.z' if isfile(join(erz_folder, f))]
+    erzFiles = [f for f in listdir(erz_folder) if f.endswith(".tx.z") if isfile(join(erz_folder, f))]
 
     filenameH5Output = h5_folder  +'/' + h5_name + '.h5'
 
@@ -486,12 +488,21 @@ def Erzsol3Tohdf5(
     ranges = np.zeros((n_examples, 1))
 
 
+    ncomp = 0
+    # Read single file to get number of receivers to initialize data_matrix
+    f = open(join(erz_folder,erzFiles[0]), 'rb')
+    k = 4
+    f.seek(k)
+    nt = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
+    data_matrix = np.zeros((n_examples, nt, ns))
+    f.close()
+
     # Begin loop over all the input files
     for i, ef in enumerate(erzFiles):
 
         f = open(join(erz_folder, ef), 'rb')
 
-        cmd_file = cmd_folder + '/in_' + ef[3:-5] + '.cmd'
+        cmd_file = cmd_folder + '/' + ef[3:-5] + '.cmd'
         f_cmd = open(cmd_file, 'r')
 
         lines = f_cmd.read().splitlines()
@@ -544,9 +555,6 @@ def Erzsol3Tohdf5(
                 k+=num_bytes[8]
                 f.seek(k)
 
-                if i == 0 and i_r==0 and j==0:
-                    data_matrix = np.zeros((n_examples, n_rec, ns))
-
                 # Only interested in the first component (the vertical component)
                 if j == 0:
                     data_matrix[i, i_r, :] = np.fromfile(f, dtype='float32',count=ns)
@@ -554,18 +562,114 @@ def Erzsol3Tohdf5(
                 k+=num_bytes[9]
                 k+=num_bytes[10]
 
+        nt = n_rec
+        ncomp = n_comp
         f.close()
 
     with h5py.File(filenameH5Output, 'w') as hf:
 
         # Create group and attributes
         g = hf.create_group('Texas synthetic data')
-        g.attrs['number of receivers'] = n_rec
-        g.attrs['number of components'] = n_comp
+        g.attrs['number of receivers'] = nt
+        g.attrs['number of components'] = ncomp
         hf.create_dataset('stike, dip, rake, M0', data=sou_physics, dtype='int32')
         hf.create_dataset('source location', data=sou_coordinates, dtype='int32')
         hf.create_dataset('cluster IDs', data=one_hot_vectors)
         hf.create_dataset('ML array', data=data_matrix, dtype='f')
+
+
+
+def read_erzsol3(
+    erz_file: str,
+    cmd_file: str,
+    ns: int)->np.ndarray:
+
+    """
+    This function reads a single erz3 file to a npy array
+
+    Parameters
+    ----------
+    erz_file: str
+        File of erzsol data outputs
+    cmd_file: str
+        File of erzsol inputs
+    ns: int
+        Number of time samples per trace (should be equal for all traces)
+
+
+    Returns
+    -------
+    np.array
+
+    """
+
+    ncomp = 0
+    # Read single file to get number of receivers to initialize data_matrix
+    f = open(erz_file, 'rb')
+    k = 4
+    f.seek(k)
+    nt = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
+    data = np.zeros((nt, ns))
+    f.close()
+
+    f = open(erz_file, 'rb')
+    f_cmd = open(cmd_file, 'r')
+
+    lines = f_cmd.read().splitlines()
+    f_cmd.close()
+
+    # First part information about number of receivers and components per receiver
+    k = 4
+    f.seek(k)
+    n_rec = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
+    k+=4
+    f.seek(k)
+    n_comp = np.fromfile(f,dtype='int32', count=1)[0]   # number of components per receiver
+    k+=8
+
+    # Not best prgramming. But does the job. These are the bytes at which to read beta info and data:
+    num_bytes = np.array([4,4,5,3,4,4,4,4,4,ns*4,4])
+
+    # Loop over all the receivers and their individual components
+    for i_r in range(0, n_rec):
+        for j in range(0, n_comp):
+
+            k+=num_bytes[0]
+            f.seek(k)
+            dist = np.fromfile(f, dtype='float32', count=1)
+            k+=num_bytes[1]
+            f.seek(k)
+            azi = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[2]
+            f.seek(k)
+            comp = np.fromfile(f,dtype='|S1', count=1).astype(str)[0]
+            k+=num_bytes[3]
+            f.seek(k)
+            dt = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[4]
+            f.seek(k)
+            ns = np.fromfile(f,dtype='int32', count=1)[0]
+            k+=num_bytes[5]
+            f.seek(k)
+            pcal = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[6]
+            f.seek(k)
+            tcal = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[7]
+            f.seek(k)
+            sm = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[8]
+            f.seek(k)
+
+            # Only interested in the first component (the vertical component)
+            if j == 0:
+                data[i_r, :] = np.fromfile(f, dtype='float32',count=ns)
+
+            k+=num_bytes[9]
+            k+=num_bytes[10]
+
+    return np.transpose(data)
+
 
 
 
@@ -746,9 +850,10 @@ def plotClusters(clusters: np.ndarray, n_clusters: int, n_sou: int):
         clr = randomRGB()
         ax.scatter(clusters[i*n_sou:i*n_sou+n_sou,0], clusters[i*n_sou:i*n_sou+n_sou,1], clusters[i*n_sou:i*n_sou+n_sou,2], color=randomRGB())
 
-    ax.set_xlabel('X Label')
-    ax.set_ylabel('Y Label')
-    ax.set_zlabel('Z Label')
+    ax.set_xlabel('X, m')
+    ax.set_ylabel('Y, m')
+    ax.set_zlabel('Z, m')
+    ax.invert_zaxis()
     plt.show()
 
 def randomRGB():
@@ -799,7 +904,7 @@ def Erzsol3ToMultipleHdf5(erz_folder: str, cmd_folder: str, h5_folder: str):
 
         f = open(join(erz_folder, ef), 'rb')
 
-        cmd_file = cmd_folder + '/in_' + ef[3:-5] + '.cmd'
+        cmd_file = cmd_folder + '/' + ef[3:-5] + '.cmd'
         f_cmd = open(cmd_file, 'r')
 
         lines = f_cmd.read().splitlines()

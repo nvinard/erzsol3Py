@@ -1,0 +1,8 @@
+README.md
+setup.py
+erzsol3Py/__init__.py
+erzsol3Py/erzsol3Py.py
+erzsol3Py.egg-info/PKG-INFO
+erzsol3Py.egg-info/SOURCES.txt
+erzsol3Py.egg-info/dependency_links.txt
+erzsol3Py.egg-info/top_level.txt
