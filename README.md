@@ -8,7 +8,7 @@ The fortran code is compiled in the following way form the directory of this REA
 gfortran -mcmodel=medium -O2 -o erzsol3SourceCode/bin/erzsol3 erzsol3SourceCode/src/erzsol3c.f erzsol3SourceCode/src/qbessel.f erzsol3SourceCode/src/qfcoolr.f
 
 erzsol3Py can be installed via pip
-pip install -i https://test.pypi.org/simple/ erzsol3Py
+pip install erzsol3Py
 
 can be imported in python as
 import erzsol3Py.erzsol3Py as erz
