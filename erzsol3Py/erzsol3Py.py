@@ -85,7 +85,7 @@ def model2Erzsol3mod(csv_file_model: str, erzsol_mod_file: str):
 
     # Define constants in dst file:
     dz = (depth_model[1]-depth_model[0])/1000 # convert to km
-    vs = 1.0/1000.               # Set shear velocity close to zero (unknown, only interested in P-waves)
+    vs = 1.0/1000.         # Set shear velocity close to zero (unknown, only interested in P-waves)
     rho = 2.7              # Denisty is unknown, set to a constant
     qa = 0.0               # Attenuation unknown, set to 0
     qb = 0.0               # Attenuation unknown, set to 0
@@ -578,7 +578,6 @@ def Erzsol3Tohdf5(
         hf.create_dataset('ML array', data=data_matrix, dtype='f')
 
 
-
 def read_erzsol3(
     erz_file: str,
     cmd_file: str,
@@ -1011,3 +1010,73 @@ def write_betaInfo2cmdSingle(cmd_file: str, sdrm: np.ndarray, source_coord: np.n
     np.savetxt(file, source_coord, delimiter=' ', fmt='%.0f')
 
     file.close()
+
+def read_erzsol(data_path):
+    """
+    Read a single erzsol file and return data and cluster_id
+    """
+
+    ns = 4096 # number of samples per time singal
+    f = open(data_path, "rb")
+    k = 4
+    f.seek(k)
+    n_rec = np.fromfile(f, dtype='int32', count=1)[0]
+
+    data = np.zeros((n_rec, ns))
+
+    k+=4
+    f.seek(k)
+    n_comp = np.fromfile(f,dtype='int32', count=1)[0]   # number of components per receiver
+    k+=8
+
+    # Not best prgramming. But does the job. These are the bytes at which to read beta info and data:
+    num_bytes = np.array([4,4,5,3,4,4,4,4,4,ns*4,4])
+
+    # Loop over all the receivers and their individual components
+    for i_r in range(0, n_rec):
+        for j in range(0, n_comp):
+            k+=num_bytes[0]
+            f.seek(k)
+            dist = np.fromfile(f, dtype='float32', count=1)
+            k+=num_bytes[1]
+            f.seek(k)
+            azi = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[2]
+            f.seek(k)
+            comp = np.fromfile(f,dtype='|S1', count=1).astype(str)[0]
+            k+=num_bytes[3]
+            f.seek(k)
+            dt = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[4]
+            f.seek(k)
+            ns = np.fromfile(f,dtype='int32', count=1)[0]
+            k+=num_bytes[5]
+            f.seek(k)
+            pcal = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[6]
+            f.seek(k)
+            tcal = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[7]
+            f.seek(k)
+            sm = np.fromfile(f,dtype='float32', count=1)
+            k+=num_bytes[8]
+            f.seek(k)
+
+            # Only interested in the first component (the vertical component) in this case since we don't have the others in field data
+            if j == 0:
+                data[i_r, :] = np.fromfile(f, dtype='float32',count=ns)
+
+            k+=num_bytes[9]
+            k+=num_bytes[10]
+
+    f.close()
+
+    # Change modelled data to have same time step and field data and also size 1401 time samples
+    dt_field = 0.002
+    dt_modelled = 0.001
+    skip = int(dt_field/dt_modelled)
+    data = data[:, ::skip]
+    data = data[:, 200:1601]
+    data = data/np.max(np.abs(data))
+
+    return data
