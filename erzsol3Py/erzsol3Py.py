@@ -31,7 +31,6 @@ Todo: Extend to write tfrecords
 """
 
 import numpy as np
-import h5py
 import math
 import pandas
 import random
@@ -46,82 +45,68 @@ from mpl_toolkits.mplot3d import Axes3D
 #########################################################
 # FUNCTION USED TO CREATE ERZSOL3 INPUTS
 #########################################################
-
-def model2Erzsol3mod(csv_file_model: str, erzsol_mod_file: str):
+def writeModFile(vp, vs, rho, layers, layer_mode, model_name: str, erzsol3_mod_file: str, nr=3, qa=0.0, qb=0.0):
 
     '''
     model2Erzsol3mod(csv_file_model, erzsol_mod_file)
 
     This function creates a .mod file which is used for erzsol3.
-    Currently it takes only P-velocities and sets the S-velocity to 1 m/s
-    in all layers. It is also currently stricly defined for the texas model
-    that I used for my CNN application. However, it can easily be changed
-    for other purposes and to include S-velocities.
 
     Parameters
     ----------
-    csv_file_model: str
-        The path to the csv file containing the P-velocities and depth information
-    erzsol_mod_file: str
-        The name of the output file ending with .mod
+    vp: P-velocities km/s
+    vs: S-velocities km/s
+    rho: density
+    layers: either thickness of each layer or depth of each layer (km)
+    layer_mode: if thickness or depth given in layers
+        =0 for thickness
+        =1 for depth
+    model_name: str, name of your model (named inside .mod file)
+    erzsol_mod_file: str, name of your .mod file and where you want to save it
+    nr: controls number of reverberations in the layer
+        nr=0: no reflection from top layer
+        nr=1: no internal multiples in layer
+        nr>-3: all internal multiples in layer
+
+    For more details check B.L.N Kennet's manual of his ERZSOL3 software.
 
     Returns
     -------
-    Writes the erzsol_mod_file
+    erzsol_mod_file
 
     '''
 
-    model = pandas.read_csv(csv_file_model)
-    velocity = model['Velocity'].values
-    depth_model = np.arange(0,3450,50)
+    if (layer_mode < 0 or layer_mode >1):
+        raise Exception("layer_mode not equal to 0 or 1")
 
-    # Change velocity to be in 50 m layers instead of 25m
-    vel=[]
-    for i,k in enumerate(velocity):
-        if i%2 == 0:
-            vel.append(np.mean(velocity[i:i+1]))
+    file = open(erzsol3_mod_file, 'w+')
 
-    velocity = np.round(vel)/1000. # velocity in km/s
-
-    # Define constants in dst file:
-    dz = (depth_model[1]-depth_model[0])/1000 # convert to km
-    vs = 1.0/1000.               # Set shear velocity close to zero (unknown, only interested in P-waves)
-    rho = 2.7              # Denisty is unknown, set to a constant
-    qa = 0.0               # Attenuation unknown, set to 0
-    qb = 0.0               # Attenuation unknown, set to 0
-
-    file = open(erzsol_mod_file, 'w+')
-
-    model_name = 'texasModel\n'
-    nLayers_thickness = '    {}        {}\n'.format(len(depth_model), 0)
-    L = [model_name, nLayers_thickness]
+    model_name = model_name + '\n'
+    nLayers_type = '    {}        {}\n'.format(len(layers), layer_mode)
+    L = [model_name, nLayers_type]
     file.writelines(L)
 
-    for i, vp in enumerate(velocity):
-        L = ['3   {:.3f}    {:.3f}     {:.2f}     {:.3f}    {:.3f}     {:.3f}\n'.format(vp,vs,rho,dz,qa,qb)]
+    for i in range(len(vp)):
+        L = ['{}   {:.3f}    {:.3f}     {:.2f}     {:.3f}    {:.3f}     {:.3f}\n'.format(nr, vp[i],vs[i],rho[i],layers[i],qa,qb)]
         file.writelines(L)
 
     file.close()
 
-
-def write2dst(receiver_file: str, model_file: str, source_coord: np.ndarray, dst_file: str):
+def writeDstFile(rxs:np.ndarray, sx:np.ndarray, dst_file: str):
 
     '''
-    write2dst(receiver_file, model_file, source_coord, dst_file)
+    writeDstFile(rxs, sx, dst_file)
 
     This function writes the .dst file containing the range and azimuth
     of each receiver to the source. Strictly for the texas data at the moment
 
     Parameters
     ----------
-    receiver_file: str
-        csv file with receicer information
-    model_file: str
-        csv file about the model
-    source_coord: np.ndarray of shape (1,3)
-        cartesian source coordinates in meters
-    dst_file: str
-        name of output dst file
+    rxs: np.ndarray, receiver locations of shape (n_receivers, 3)
+        cartesian coordinates in km
+    sx: np.ndarray, source location of shape (1,3)
+        cartesian coordinates in km
+    dst_file: str, name of output dst file
 
     Returns
     -------
@@ -129,40 +114,13 @@ def write2dst(receiver_file: str, model_file: str, source_coord: np.ndarray, dst
 
     '''
 
-    model = pandas.read_csv(model_file)
-    depth_m = model['Depth'].values
+    if sx.shape != (3,):
+        raise Exception(" shape of sx no (3,)")
 
-    receiver_info = pandas.read_csv(receiver_file)
-    easting = receiver_info['Easting'].values
-    northing = receiver_info['Northing'].values
-    depth = receiver_info['Depth'].values
-    group = receiver_info['Group'].values
+    if rxs.shape[0] != 3:
+        raise Exception("rxs.shape[0] not 3")
 
-    # Keep only deepest receivers
-    id_kill = np.where(group==2)[0] # id of shallow receivers 1
-    id_kill = np.append(id_kill, np.where(group==3)[0]) # id of shallow receivers 2
-    id_kill = np.append(id_kill, np.where(group==4)[0]) # id of permantetely dead traces and duplicates
-
-    x_rec = easting - min(easting)
-    y_rec = northing - min(northing)
-    z_rec = depth + np.abs(min(depth_m))
-
-    x_rec = np.delete(x_rec, id_kill)
-    y_rec = np.delete(y_rec, id_kill)
-    z_rec = np.delete(z_rec, id_kill)
-
-    # Addtional permantently dead channels to remove
-    id_dead = np.array([0, 1, 2, 4, 5, 8, 16, 19, 22, 25, 31, 32, 33, 34, 35, 36, 37, 42, 43, 45, 46, 47, 51, 52, 55, 56, 57, 59, 60, 62, 63, 66, 67, 68, 69, 71, 72, 73, 75, 76, 79, 83, 84, 85, 86, 88, 89, 92, 93, 94, 96, 97, 98, 100, 103, 106, 107, 108, 110, 111, 112, 113, 114, 116, 119, 122, 123, 127, 128, 129, 131, 132, 134, 136, 137, 139, 142, 144, 145, 146, 150, 152, 155, 156, 157, 158, 160, 165, 166, 167, 169, 170, 172, 174, 175, 178, 179, 180, 181, 182, 186, 187, 189, 190, 193])
-    x_rec = np.delete(x_rec, id_dead)
-    y_rec = np.delete(y_rec, id_dead)
-    z_rec = np.delete(z_rec, id_dead)
-
-    receivers = np.append(x_rec, y_rec)
-    receivers = np.append(receivers,z_rec)
-    receivers = np.reshape(receivers, (3, len(x_rec)))
-
-    rad, azi = cart2polar(receivers, source_coord)
-    rad = rad/1000 # Convert to km
+    rad, azi = cart2polar(rxs, sx)
 
     file = open(dst_file, 'w')
     n_rec = len(rad)
@@ -175,39 +133,83 @@ def write2dst(receiver_file: str, model_file: str, source_coord: np.ndarray, dst
 
     file.close()
 
-def write_dst2cmd(cmd_file: str, dst_file: str, zs: float):
 
-    """
-    write_dst2cmd(cmd_file, dst_file, zs)
+def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
+              ns, dt, MT, sx_depth, sx_freq, lowf, highf, min_slow,
+              max_slow, wav="RI", wav_fn="ew.wav", starttime=0.0, n_slowness=10000,
+              slow_plo=10, slow_phi=10, slow_red=0.0, dmp="YES",
+              debug_fk="NO", debug_wav="NO"):
 
-    This function writes the path to the dst_file to and the source depth
-    to the cmd file.
+    '''
+    write cmd file
 
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file
-    dst_file: str
-        Path to dst file
-    zs: float
-        cartesian source depth in km
+    parameters
+    cmd_file: str, name of cmd file to create
+    erz_out_file: str, name of erzsol3 output file (synthetics)
+    mod_file: str, .mod file
+    dst_file: str, .dst file
+    srf_cond: str, surface condition
+        (HS, H1, WF, WS)
+    ns: int, number of time samples
+    dt: float, time step
+    MT: np.ndarray, moment tensor (3x3)
+    sx_depth: float, source depth (km)
+    sx_freq: float, source center frequency
+    lowf: float, frequency taper low
+    highf: float, frequency taper high
+    min_slow: float, minimum slowness
+    max_slow: float, maximum slowness
 
-    Returns
-    -------
-    Writes dst_file
+    optional parameters
+    wav
+    wav_fn
+    starttime
+    n_slowness
+    slow_plo
+    slow_phi
+    slow_red
+    dmp
+    debug_fk
+    debug_wav
 
-    """
-    file=open(cmd_file,'r')
-    lines=file.read().splitlines()
 
-    lines[20] = '   {:.4f}                                  Depth of source'.format(zs)
-    lines[21] = '"{}"                                    Range and azimuth file'.format(dst_file)
+    '''
 
-    file.close()
 
     file = open(cmd_file, 'w')
-    file.write('\n'.join(lines))
+
+    L = ['"ERZSOL3-ew1  "              Title\n']
+    L.append('"{}"               File for T-X seismogram output\n'.format(erz_out_file))
+    L.append('"{}"                              Velocity model file\n'.format(mod_file))
+    L.append('"{}"                                    Surface Condition (HS,H1,WF,WS)\n'.format(srf_cond))
+    L.append(' {}                                  Number of slownesses (<2500)\n'.format(n_slowness))
+    L.append(' {:.4f}                                Minimum slowness\n'.format(min_slow))
+    L.append(' {:.4f}                                Maximum slowness\n'.format(max_slow))
+    L.append('{}                                      Slowness taper plo (n samples)\n'.format(slow_plo))
+    L.append('{}                                      Slowness taper phi (n samples)\n'.format(slow_phi))
+    L.append('"{}"                                    Wavelet input or Ricker (WA/RI)\n'.format(wav))
+    L.append('"{}"                                Wavelet file\n'.format(wav_fn))
+    L.append('"{}"                                    Exponential damping? (YE/NO)\n'.format(dmp))
+    L.append('{}                                  Number of time points\n'.format(ns))
+    L.append('  {:.3f}                                   Time step\n'.format(dt))
+    L.append('   {:.3f}  {:.3f}                            Frequency taper (low)\n'.format(lowf[0], lowf[1]))
+    L.append('   {:.3f}  {:.3f}                            Frequency taper (high)\n'.format(highf[0], highf[1]))
+    L.append('   {:.1f}                                  Dominant frequency      [RI]\n'.format(sx_freq))
+    L.append('    {:.2f}      {:.2f}       {:.2f}            Moment tensor Components\n'.format(MT[0,0],MT[0,1],MT[0,2]))
+    L.append('    {:.2f}      {:.2f}       {:.2f}\n'.format(MT[1,0],MT[1,1],MT[1,2]))
+    L.append('    {:.2f}      {:.2f}       {:.2f}\n'.format(MT[2,0],MT[2,1],MT[2,2]))
+    L.append('   {:.4f}                                  Depth of source\n'.format(sx_depth))
+    L.append('"{}"                                    Range and azimuth file\n'.format(dst_file))
+    L.append('  {:.1f}                                   Reduction slowness\n'.format(slow_red))
+    L.append('  {:.3f}                                 Start time (reduced)\n'.format(starttime))
+    L.append('"{}"                                    Debug/frequency-wavenumber (YE/NO)\n'.format(debug_fk))
+    L.append('"{}"                                    Debug/waveform (YE/NO)\n'.format(debug_wav))
+
+
+    file.writelines(L)
     file.close()
+
+    return None
 
 def MT_components(strike_dip_rake_M0: np.ndarray) -> np.ndarray:
 
@@ -259,140 +261,6 @@ def MT_components(strike_dip_rake_M0: np.ndarray) -> np.ndarray:
 
     return MT
 
-def write_mod2cmd(cmd_file: str, mod_file: str):
-
-    """
-    write_mod2cmd(cmd_file, mod_file)
-
-    This function writes the model file to the cmd file
-
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file
-    mod_file: str
-        Path to model file
-
-    Returns
-    -------
-    Modified cmd_file including path to model file
-
-    """
-
-    file = open(cmd_file, 'r')
-    lines = file.read().splitlines()
-    lines[2] = '"{}"                              Velocity model file'.format(mod_file)
-    file.close()
-
-    file=open(cmd_file, 'w')
-    file.write('\n'.join(lines))
-    file.close()
-
-def writeMT2cmd(cmd_file: str, MT: np.ndarray, dom_freq: float):
-
-    """
-    writeMT2cmd(cmd_file, MT)
-
-    This function writes the MT to the cmd file
-
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file
-    MT: np.ndarray of shape (3,3)
-        Full seimsic moment tensor
-
-    Returns
-    -------
-    Modified cmd_file including MT
-
-    """
-
-    file = open(cmd_file, 'r')
-
-    lines = file.read().splitlines()
-
-    lines[16] = '   {:.1f}                                  Dominant frequency      [RI]'.format(dom_freq)
-    lines[17] = '    {:.2f}      {:.2f}       {:.2f}            Moment tensor Components'.format(MT[0,0],MT[0,1],MT[0,2])
-    lines[18] = '    {:.2f}      {:.2f}       {:.2f}'.format(MT[1,0],MT[1,1],MT[1,2])
-    lines[19] = '    {:.2f}      {:.2f}       {:.2f}'.format(MT[2,0],MT[2,1],MT[2,2])
-
-    file.close()
-
-    file = open(cmd_file,'w')
-    file.write('\n'.join(lines))
-    file.close()
-
-
-def writeErzsolOut2cmd(cmd_file: str, erzsol_seismo_out: str):
-
-    """
-    writeErzsolOut2cmd(cmd_file, seisOut)
-
-    This function writes the Path to the erzsol seimogram output to the
-    cmd file.
-
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file
-    erzsol_seismo_out: str
-        Path/name of erzsol3 output file
-
-    Returns
-    -------
-    Modified cmd_file including path to erzsol3 output file
-
-    """
-    file = open(cmd_file, 'r')
-    lines = file.read().splitlines()
-    file.close()
-    lines[1] = '"{}"                                  File for T-X seismogram output'.format(erzsol_seismo_out)
-    file = open(cmd_file, 'w')
-    file.write('\n'.join(lines))
-    file.close()
-
-
-
-def write_betaInfo2cmd(
-    cmd_file: str,
-    strike_dip_rake_M0: np.ndarray,
-    source_coord: np.ndarray,
-    clusterID: np.ndarray):
-
-    """
-    write_betaInfo2cmd(cmd_file, strike_dip_rake_M0, source_coord, clusterID)
-
-    This function writes additional beta information to the end of the
-    cmd file.
-
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file
-    strike_dip_rake_M0: np.ndarray of shape (1,4)
-        contains strike, dip, rake and scalar seismic moment in that order
-    source_coord: np.ndarray of shape (1,3)
-        cartesian source coordinates in meters
-    clusterID: np.ndarray of shape (1,number_of_clusters)
-        The one hot vector used for to refer to the cluster.
-
-    Returns
-    -------
-    Modified cmd_file including strike, dipe rake and seismic moment,
-    the cartesian source coorindates and the one_hot_vector
-
-    """
-
-    file = open(cmd_file, 'a')
-    file.write('\n\n# strike, dip, rake and seismic moment\n')
-    np.savetxt(file, strike_dip_rake_M0, delimiter=' ', fmt='%.0f')
-    file.write('\n# Cartesian source coordinates\n')
-    np.savetxt(file, source_coord, delimiter=' ', fmt='%.0f')
-    file.write('\n# cluster ID vector\n')
-    np.savetxt(file, clusterID, delimiter=' ', fmt='%.0f')
-
-    file.close()
 
 def cart2polar(
     cart_receivers: np.ndarray,
@@ -430,159 +298,20 @@ def cart2polar(
     for i in range(cart_receivers.shape[1]):
 
         ranges[i] = np.sqrt(np.sum((cart_source - cart_receivers[:,i])**2))
-        azimuth[i] = np.rad2deg(np.arctan2(cart_receivers[0,i]-cart_source[0,0], cart_receivers[1,i]-cart_source[0,1]))
+        azimuth[i] = np.rad2deg(np.arctan2(cart_receivers[0,i]-cart_source[0],
+                                           cart_receivers[1,i]-cart_source[1]))
 
     return ranges, azimuth
 
 
 
 #########################################################
-# FUNCTION TO WRITE ERZSOL OUTPUT TO HDF5 DATABASE
-# AND TO READ HDF5
+# READ ERZSOL3 OUPUT TO NPY ARRAY
 #########################################################
 
-def Erzsol3Tohdf5(
-    erz_folder: str,
-    cmd_folder: str,
-    h5_folder: str,
-    h5_name: str,
-    n_clusters: int,
-    ns: int):
-
-    """
-    This function writes out a single hdf5 file containing all information
-    and the data that can be used for Machine learning and other
-
-    Parameters
-    ----------
-    erz_folder: str
-        Path to folder containing all erzsol data outputs
-    cmd_folder: str
-        Path to folder containing all erzsol inputs
-    h5_folder: str
-        Path to folder in whcih to store the h5 file
-    h5_name: str
-        Name of hdf5 file
-    n_clusters: int
-        Number of clusters
-    ns: int
-        Number of time samples per trace (should be equal for all traces)
-
-
-    Returns
-    -------
-    Writes the hdf5 file to h5_folder/h5_name
-
-    """
-
-    erzFiles = [f for f in listdir(erz_folder) if f.endswith(".tx.z") if isfile(join(erz_folder, f))]
-
-    filenameH5Output = h5_folder  +'/' + h5_name + '.h5'
-
-    n_examples = len(erzFiles)
-
-    sou_physics = np.zeros((n_examples, 4), dtype='int') # strike, dip, rake, seismic moment
-    sou_coordinates = np.zeros((n_examples, 3), dtype='int')
-    one_hot_vectors = np.zeros((n_examples, n_clusters), dtype='int')
-    azimuths = np.zeros((n_examples, 1))
-    ranges = np.zeros((n_examples, 1))
-
-
-    ncomp = 0
-    # Read single file to get number of receivers to initialize data_matrix
-    f = open(join(erz_folder,erzFiles[0]), 'rb')
-    k = 4
-    f.seek(k)
-    nt = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
-    data_matrix = np.zeros((n_examples, nt, ns))
-    f.close()
-
-    # Begin loop over all the input files
-    for i, ef in enumerate(erzFiles):
-
-        f = open(join(erz_folder, ef), 'rb')
-
-        cmd_file = cmd_folder + '/' + ef[3:-5] + '.cmd'
-        f_cmd = open(cmd_file, 'r')
-
-        lines = f_cmd.read().splitlines()
-        f_cmd.close()
-
-        sou_physics[i,:] = np.fromstring(lines[28], dtype='int', sep=' ')
-        sou_coordinates[i,:] = np.fromstring(lines[31], dtype='int', sep=' ')
-        one_hot_vectors[i,:] = np.fromstring(lines[34], dtype='int', sep=' ')
-
-        # First part information about number of receivers and components per receiver
-        k = 4
-        f.seek(k)
-        n_rec = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
-        k+=4
-        f.seek(k)
-        n_comp = np.fromfile(f,dtype='int32', count=1)[0]   # number of components per receiver
-        k+=8
-
-        # Not best prgramming. But does the job. These are the bytes at which to read beta info and data:
-        num_bytes = np.array([4,4,5,3,4,4,4,4,4,ns*4,4])
-
-        # Loop over all the receivers and their individual components
-        for i_r in range(0, n_rec):
-            for j in range(0, n_comp):
-
-                k+=num_bytes[0]
-                f.seek(k)
-                dist = np.fromfile(f, dtype='float32', count=1)
-                k+=num_bytes[1]
-                f.seek(k)
-                azi = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[2]
-                f.seek(k)
-                comp = np.fromfile(f,dtype='|S1', count=1).astype(str)[0]
-                k+=num_bytes[3]
-                f.seek(k)
-                dt = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[4]
-                f.seek(k)
-                ns = np.fromfile(f,dtype='int32', count=1)[0]
-                k+=num_bytes[5]
-                f.seek(k)
-                pcal = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[6]
-                f.seek(k)
-                tcal = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[7]
-                f.seek(k)
-                sm = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[8]
-                f.seek(k)
-
-                # Only interested in the first component (the vertical component)
-                if j == 0:
-                    data_matrix[i, i_r, :] = np.fromfile(f, dtype='float32',count=ns)
-
-                k+=num_bytes[9]
-                k+=num_bytes[10]
-
-        nt = n_rec
-        ncomp = n_comp
-        f.close()
-
-    with h5py.File(filenameH5Output, 'w') as hf:
-
-        # Create group and attributes
-        g = hf.create_group('Texas synthetic data')
-        g.attrs['number of receivers'] = nt
-        g.attrs['number of components'] = ncomp
-        hf.create_dataset('stike, dip, rake, M0', data=sou_physics, dtype='int32')
-        hf.create_dataset('source location', data=sou_coordinates, dtype='int32')
-        hf.create_dataset('cluster IDs', data=one_hot_vectors)
-        hf.create_dataset('ML array', data=data_matrix, dtype='f')
-
-
-
-def read_erzsol3(
+def readErzsol3(
     erz_file: str,
-    cmd_file: str,
-    ns: int)->np.ndarray:
+    cmd_file: str)->np.ndarray:
 
     """
     This function reads a single erz3 file to a npy array
@@ -603,13 +332,18 @@ def read_erzsol3(
 
     """
 
-    ncomp = 0
+    # Read number of time-samples from cmd file
+    f_cmd = open(cmd_file, 'r')
+    lines = f_cmd.read().splitlines()
+    f_cmd.close()
+    ns = int(lines[12].split(' ')[0]) # Get number of time-samples
+
     # Read single file to get number of receivers to initialize data_matrix
     f = open(erz_file, 'rb')
     k = 4
     f.seek(k)
     nt = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
-    data = np.zeros((nt, ns))
+    data = np.zeros((3, nt, ns))
     f.close()
 
     f = open(erz_file, 'rb')
@@ -627,7 +361,7 @@ def read_erzsol3(
     n_comp = np.fromfile(f,dtype='int32', count=1)[0]   # number of components per receiver
     k+=8
 
-    # Not best prgramming. But does the job. These are the bytes at which to read beta info and data:
+    # Not best programming. But does the job. These are the bytes at which to read beta info and data:
     num_bytes = np.array([4,4,5,3,4,4,4,4,4,ns*4,4])
 
     # Loop over all the receivers and their individual components
@@ -662,69 +396,16 @@ def read_erzsol3(
             f.seek(k)
 
             # Only interested in the first component (the vertical component)
-            if j == 0:
-                data[i_r, :] = np.fromfile(f, dtype='float32',count=ns)
+            # change two three components
+            data[j, i_r, :] = np.fromfile(f, dtype='float32',count=ns)
+            #if j == 0:
+            #    data[i_r, :] = np.fromfile(f, dtype='float32',count=ns)
 
             k+=num_bytes[9]
             k+=num_bytes[10]
 
-    return np.transpose(data)
+    return data
 
-
-
-
-def readingHdf5(filename: str) -> np.ndarray:
-
-    """
-    dataZ = readingHdf5(filename)
-
-    This function reads an hdf5 file and returns the data
-
-    Parameters
-    ----------
-    filenameL: str
-        hdf5 file
-
-    Returns
-    -------
-    dataZ: np.ndarray
-        The vertical component data
-    """
-
-    f = h5py.File(filename, 'r')
-    main_key = list(f.keys())[0]
-
-    n_receivers = f[main_key].attrs['number of receivers']
-    n_components = f[main_key].attrs['number of components']
-
-    ns = f[main_key][list(f[main_key].keys())[0]].attrs['ns'] # number of samples
-
-    dataList = list(f[main_key])
-
-    #dataR = np.zeros(shape=(ns, n_receivers))
-    dataZ = np.zeros(shape=(ns, n_receivers))
-    #dataT = np.zeros(shape=(ns, n_receivers))
-
-    cz=0
-    #cr=0
-    #ct=0
-    for i, k in enumerate(list(f[main_key])):
-
-        if k.endswith('R'):
-            #dataR[:,cr] = list(f[main_key][k])
-            #cr+=1
-            pass
-        elif k.endswith('Z' ):
-            dataZ[:,cz] = list(f[main_key][k])
-            cz+=1
-        elif k.endswith('T'):
-            #dataT[:,ct] = list(f[main_key][k])
-            #ct+=1
-            pass
-        else:
-            print('Found other ending')
-
-    return dataZ #dataR, dataZ, dataT
 
 def compute_random_source_locations_per_cluster(
     xs: np.ndarray,
@@ -821,6 +502,123 @@ def points_in_cube(pt1: tuple, pt2:tuple, pt3:tuple)->tuple:
 ###################################################
 # FUNCTIONS FOR PLOTTING
 ###################################################
+
+import copy
+import numpy as np
+def wiggle(
+    DataO: np.ndarray,
+    x=None,
+    t=None,
+    skipt=1,
+    lwidth=.5,
+    gain=1,
+    typeD='VA',
+    color='red',
+    perc=100):
+
+    """
+    wiggle(DataO, x=None, t=None, maxval=-1, skipt=1, lwidth=.5, gain=1, typeD='VA', color='red', perc=100)
+
+    This function generates a wiggle plot of the seismic data.
+
+    Parameters
+    ----------
+    DataO: np.ndarray of shape (# time samples, # traces)
+        Seismic data
+
+    Optional parameters
+    -------------------
+    x: np.ndarray of shape Data.shape[1]
+        x-coordinates to Plot
+    t: np.ndarray of shape Data.shap[0]
+        t-axis to plot
+    skipt: int
+        Skip trace, skips every n-th trace
+    ldwidth: float
+        line width of the traces in the figure, increase or decreases the traces width
+    typeD: string
+        With or without filling positive amplitudes. Use type=None for no filling
+    color: string
+        Color of the traces
+    perc: float
+        nth parcintile to be clipped
+
+    Returns
+    -------
+    Seismic wiggle plot
+
+    Adapted from segypy (Thomas Mejer Hansen, https://github.com/cultpenguin/segypy/blob/master/segypy/segypy.py)
+
+
+    """
+    # Make a copy of the original, so that it won't change the original one ouside the scope of the function
+    Data = copy.copy(DataO)
+
+    # calculate value of nth-percentile, when perc = 100, data won't be clipped.
+    nth_percentile = np.abs(np.percentile(Data, perc))
+
+    # clip data to the value of nth-percentile
+    Data = np.clip(Data, a_min=-nth_percentile, a_max = nth_percentile)
+
+    ns = Data.shape[0]
+    ntraces = Data.shape[1]
+
+    fig = plt.gca()
+    ax = plt.gca()
+    ntmax=1e+9 # used to be optinal
+
+    if ntmax<ntraces:
+        skipt=int(np.floor(ntraces/ntmax))
+        if skipt<1:
+                skipt=1
+
+    if x is not None:
+        x=x
+        ax.set_xlabel('Distance [m]')
+    else:
+        x=range(0, ntraces)
+        ax.set_xlabel('Trace number')
+
+    if t is not None:
+        t=t
+        yl='Time [s]'
+    else:
+        t=np.arange(0, ns)
+        yl='Sample number'
+
+    dx = x[1]-x[0]
+
+    Dmax = np.nanmax(Data)
+    maxval = np.abs(Dmax)
+
+    for i in range(0, ntraces, skipt):
+
+       # use copy to avoid truncating the data
+        trace = copy.copy(Data[:, i])
+        trace = Data[:, i]
+        trace[0] = 0
+        trace[-1] = 0
+        traceplt = x[i] + gain * skipt * dx * trace / maxval
+        traceplt = np.clip(traceplt, a_min=x[i]-dx, a_max=(dx+x[i]))
+
+        ax.plot(traceplt, t, color=color, linewidth=lwidth)
+
+        offset = x[i]
+
+        if typeD=='VA':
+            for a in range(len(trace)):
+                if (trace[a] < 0):
+                    trace[a] = 0
+            ax.fill_betweenx(t, offset, traceplt, where=(traceplt>offset), interpolate='True', linewidth=0, color=color)
+            ax.grid(False)
+
+        ax.set_xlim([x[0]-1, x[-1]+1])
+
+    ax.invert_yaxis()
+    ax.set_ylim([np.max(t), np.min(t)])
+    ax.set_ylabel(yl)
+
+
 def plotClusters(clusters: np.ndarray, n_clusters: int, n_sou: int):
 
     '''
@@ -863,151 +661,3 @@ def randomRGB():
     are used to define random RGB-values for the cluster
     '''
     return (random.randrange(0,100,1)/100,random.randrange(0,100,1)/100,random.randrange(0,100,1)/100)
-
-
-###################################################
-# UNUSED/RARELY USED FUNCTIONS
-###################################################
-def Erzsol3ToMultipleHdf5(erz_folder: str, cmd_folder: str, h5_folder: str):
-
-    '''
-    This function writes out a single hdf5 database for each erzsol seimsogram
-    output contained in the output folder
-
-    Parameters
-    ----------
-    erz_folder: str
-        Path to folder containing all erzsol data outputs
-    cmd_folder: str
-        Path to folder containing all erzsol cmd inputs
-    h5_folder: str
-        Path to folder in whcih to store the h5 file
-
-    Returns
-    -------
-    hdf5 file
-
-
-    '''
-
-    #erzFiles = [f for f in listdir(erz_folder) if f!='.DS_Store' if isfile(join(erz_folder, f))]
-    erzFiles = [f for f in listdir(erz_folder) if f=='.tx.z' if isfile(join(erz_folder, f))]
-
-    sou_physics = np.zeros((1, 4), dtype='int') # strike, dip, rake, seismic moment
-    sou_coordinates = np.zeros((1, 3), dtype='int')
-    azimuths = np.zeros((1, 1))
-    ranges = np.zeros((1, 1))
-
-
-    # Begin loop over all the input files
-    for i, ef in enumerate(erzFiles):
-
-        f = open(join(erz_folder, ef), 'rb')
-
-        cmd_file = cmd_folder + '/' + ef[3:-5] + '.cmd'
-        f_cmd = open(cmd_file, 'r')
-
-        lines = f_cmd.read().splitlines()
-        f_cmd.close()
-
-        filenameH5Output = h5_folder + '/h5Out_' + ef[3:-5] + '.h5'
-
-        sou_physics[0,:] = np.fromstring(lines[28], dtype='int', sep=' ')
-        sou_coordinates[0,:] = np.fromstring(lines[31], dtype='int', sep=' ')
-
-        # First part information about number of receivers and components per receiver
-        k = 4
-        f.seek(k)
-        n_rec = np.fromfile(f,dtype='int32', count=1)[0]  # number of receivers
-        k+=4
-        f.seek(k)
-        n_comp = np.fromfile(f,dtype='int32', count=1)[0]   # number of components per receiver
-        k+=8
-
-        # Not best prgramming. But does the job. These are the bytes at which to read beta info and data:
-        num_bytes = np.array([4,4,5,3,4,4,4,4,4,4096*4,4])
-
-        print(ef)
-        # Loop over all the receivers and their individual components
-        for i_r in range(0, n_rec):
-            for j in range(0, n_comp):
-
-                k+=num_bytes[0]
-                f.seek(k)
-                dist = np.fromfile(f, dtype='float32', count=1)
-                k+=num_bytes[1]
-                f.seek(k)
-                azi = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[2]
-                f.seek(k)
-                comp = np.fromfile(f,dtype='|S1', count=1).astype(str)[0]
-                k+=num_bytes[3]
-                f.seek(k)
-                dt = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[4]
-                f.seek(k)
-                ns = np.fromfile(f,dtype='int32', count=1)[0]
-                k+=num_bytes[5]
-                f.seek(k)
-                pcal = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[6]
-                f.seek(k)
-                tcal = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[7]
-                f.seek(k)
-                sm = np.fromfile(f,dtype='float32', count=1)
-                k+=num_bytes[8]
-                f.seek(k)
-
-                if i == 0 and i_r == 0 and j==0 :
-                    data_matrix = np.zeros((ns, n_rec))
-
-                # Only interested in the first component (the vertical component)
-                if j == 0:
-                    data_matrix[:, i_r] = np.fromfile(f, dtype='float32',count=ns)
-
-                k+=num_bytes[9]
-                k+=num_bytes[10]
-
-        f.close()
-
-        with h5py.File(filenameH5Output, 'w') as hf:
-
-            # Create group and attributes
-            g = hf.create_group('Texas synthetic data')
-            g.attrs['number of receivers'] = n_rec
-            g.attrs['number of components'] = n_comp
-            hf.create_dataset('stike, dip, rake, M0', data=sou_physics, dtype='int32')
-            hf.create_dataset('source location', data=sou_coordinates, dtype='int32')
-            hf.create_dataset('data', data=data_matrix, dtype='f')
-
-
-
-def write_betaInfo2cmdSingle(cmd_file: str, sdrm: np.ndarray, source_coord: np.ndarray):
-
-    """
-    write_betaInfo2cmdSingle(cmd_file, sdrm, source_coord)
-
-    This function writes beta information to the end of the cmd file
-
-    Parameters
-    ----------
-    cmd_file: str
-        Path to cmd file (string)
-    sdrm: np.ndarray of shape (1,4)
-        contains strike, dip, rake and scalar seismic moment in that order
-    source_coord: np.ndarray (1,3)
-        Cartesian source coordinates
-
-    Returns
-    -------
-    Changed cmd_file to include beta info
-    """
-
-    file = open(cmd_file, 'a')
-    file.write('\n\n# strike, dip, rake and seismic moment\n')
-    np.savetxt(file, sdrm, delimiter=' ', fmt='%.0f')
-    file.write('\n# Cartesian source coordinates\n')
-    np.savetxt(file, source_coord, delimiter=' ', fmt='%.0f')
-
-    file.close()
