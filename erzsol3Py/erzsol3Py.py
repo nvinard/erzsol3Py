@@ -44,11 +44,7 @@ from mpl_toolkits.mplot3d import Axes3D
 #########################################################
 # FUNCTION USED TO CREATE ERZSOL3 INPUTS
 #########################################################
-<<<<<<< HEAD
 def writeModFile(vp, vs, rho, layers, layer_mode, model_name, erzsol3_mod_file, nr=3, qa=0.0, qb=0.0):
-=======
-def writeModFile(vp, vs, rho, layers, layer_mode, model_name: str, erzsol3_mod_file: str, nr=3, qa=0.0, qb=0.0):
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     '''
     model2Erzsol3mod(csv_file_model, erzsol_mod_file)
@@ -95,11 +91,7 @@ def writeModFile(vp, vs, rho, layers, layer_mode, model_name: str, erzsol3_mod_f
 
     file.close()
 
-<<<<<<< HEAD
 def writeDstFile(rxs, sx, dst_file):
-=======
-def writeDstFile(rxs:np.ndarray, sx:np.ndarray, dst_file: str):
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     '''
     writeDstFile(rxs, sx, dst_file)
@@ -141,7 +133,6 @@ def writeDstFile(rxs:np.ndarray, sx:np.ndarray, dst_file: str):
     file.close()
 
 
-<<<<<<< HEAD
 def writeCmdFile(
     cmd_file,
     erz_out_file,
@@ -154,13 +145,6 @@ def writeCmdFile(
     wavelet="RI", wavelet_file="ew.wav", starttime=0.0,
     n_slowness=10000, slow_plo=10, slow_phi=10, slow_red=0.0,
     exponential_damping="YES", debug_fk="NO", debug_wav="NO"):
-=======
-def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
-              ns, dt, MT, sx_depth, sx_freq, lowf, highf, min_slow,
-              max_slow, wav="RI", wav_fn="ew.wav", starttime=0.0, n_slowness=10000,
-              slow_plo=10, slow_phi=10, slow_red=0.0, dmp="YES",
-              debug_fk="NO", debug_wav="NO"):
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     '''
     write cmd file
@@ -170,16 +154,11 @@ def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
     erz_out_file: str, name of erzsol3 output file (synthetics)
     mod_file: str, .mod file
     dst_file: str, .dst file
-<<<<<<< HEAD
     surface_condition: str, surface condition
-=======
-    srf_cond: str, surface condition
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
         (HS, H1, WF, WS)
     ns: int, number of time samples
     dt: float, time step
     MT: np.ndarray, moment tensor (3x3)
-<<<<<<< HEAD
     source_coord: float, source depth (km)
     strike_dip_rake_magnitude: strike, dip rake, moment magnitude
     source_center_frequency: float, source center frequency
@@ -191,24 +170,11 @@ def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
     optional parameters
     wavelet
     wavelet_file
-=======
-    sx_depth: float, source depth (km)
-    sx_freq: float, source center frequency
-    lowf: float, frequency taper low
-    highf: float, frequency taper high
-    min_slow: float, minimum slowness
-    max_slow: float, maximum slowness
-
-    optional parameters
-    wav
-    wav_fn
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
     starttime
     n_slowness
     slow_plo
     slow_phi
     slow_red
-<<<<<<< HEAD
     exponential_damping
     debug_fk
     debug_wav
@@ -253,6 +219,17 @@ def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
     L.append('"{}"                                    Debug/frequency-wavenumber (YE/NO)\n'.format(debug_fk))
     L.append('"{}"                                    Debug/waveform (YE/NO)\n'.format(debug_wav))
 
+    '''
+    L.append('\n\n# strike, dip, rake and seismic moment:\n')
+    L.append('{} {} {} {} \n'.format(
+        strike_dip_rake_magnitude[0,0],
+        strike_dip_rake_magnitude[0,1],
+        strike_dip_rake_magnitude[0,2],
+        strike_dip_rake_magnitude[0,3]
+        )
+    )
+    '''
+
     L.append('# Cartesian source coordinates\n')
     L.append('{} {} {}'.format(source_coord[0], source_coord[1], source_coord[2]))
 
@@ -262,52 +239,6 @@ def writeCmdFile(cmd_file, erz_out_file, mod_file, dst_file, srf_cond,
     return None
 
 def MT_components(strike_dip_rake_M0):
-=======
-    dmp
-    debug_fk
-    debug_wav
-
-
-    '''
-
-
-    file = open(cmd_file, 'w')
-
-    L = ['"ERZSOL3-ew1  "              Title\n']
-    L.append('"{}"               File for T-X seismogram output\n'.format(erz_out_file))
-    L.append('"{}"                              Velocity model file\n'.format(mod_file))
-    L.append('"{}"                                    Surface Condition (HS,H1,WF,WS)\n'.format(srf_cond))
-    L.append(' {}                                  Number of slownesses (<2500)\n'.format(n_slowness))
-    L.append(' {:.4f}                                Minimum slowness\n'.format(min_slow))
-    L.append(' {:.4f}                                Maximum slowness\n'.format(max_slow))
-    L.append('{}                                      Slowness taper plo (n samples)\n'.format(slow_plo))
-    L.append('{}                                      Slowness taper phi (n samples)\n'.format(slow_phi))
-    L.append('"{}"                                    Wavelet input or Ricker (WA/RI)\n'.format(wav))
-    L.append('"{}"                                Wavelet file\n'.format(wav_fn))
-    L.append('"{}"                                    Exponential damping? (YE/NO)\n'.format(dmp))
-    L.append('{}                                  Number of time points\n'.format(ns))
-    L.append('  {:.3f}                                   Time step\n'.format(dt))
-    L.append('   {:.3f}  {:.3f}                            Frequency taper (low)\n'.format(lowf[0], lowf[1]))
-    L.append('   {:.3f}  {:.3f}                            Frequency taper (high)\n'.format(highf[0], highf[1]))
-    L.append('   {:.1f}                                  Dominant frequency      [RI]\n'.format(sx_freq))
-    L.append('    {:.2f}      {:.2f}       {:.2f}            Moment tensor Components\n'.format(MT[0,0],MT[0,1],MT[0,2]))
-    L.append('    {:.2f}      {:.2f}       {:.2f}\n'.format(MT[1,0],MT[1,1],MT[1,2]))
-    L.append('    {:.2f}      {:.2f}       {:.2f}\n'.format(MT[2,0],MT[2,1],MT[2,2]))
-    L.append('   {:.4f}                                  Depth of source\n'.format(sx_depth))
-    L.append('"{}"                                    Range and azimuth file\n'.format(dst_file))
-    L.append('  {:.1f}                                   Reduction slowness\n'.format(slow_red))
-    L.append('  {:.3f}                                 Start time (reduced)\n'.format(starttime))
-    L.append('"{}"                                    Debug/frequency-wavenumber (YE/NO)\n'.format(debug_fk))
-    L.append('"{}"                                    Debug/waveform (YE/NO)\n'.format(debug_wav))
-
-
-    file.writelines(L)
-    file.close()
-
-    return None
-
-def MT_components(strike_dip_rake_M0: np.ndarray) -> np.ndarray:
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     """
     MT_components(strike, dip, rake, M0)
@@ -405,13 +336,7 @@ def cart2polar(
 # READ ERZSOL3 OUPUT TO NPY ARRAY
 #########################################################
 
-<<<<<<< HEAD
 def readErzsol3(erz_file, cmd_file):
-=======
-def readErzsol3(
-    erz_file: str,
-    cmd_file: str)->np.ndarray:
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     """
     This function reads a single erz3 file to a npy array
@@ -606,11 +531,7 @@ def points_in_cube(pt1, pt2, pt3):
 import copy
 import numpy as np
 def wiggle(
-<<<<<<< HEAD
     DataO,
-=======
-    DataO: np.ndarray,
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
     x=None,
     t=None,
     skipt=1,
@@ -723,11 +644,7 @@ def wiggle(
     ax.set_ylabel(yl)
 
 
-<<<<<<< HEAD
 def plotClusters(clusters, n_clusters, n_sou):
-=======
-def plotClusters(clusters: np.ndarray, n_clusters: int, n_sou: int):
->>>>>>> 4018f71b4c2153fa8fa374ce5e520f9936bf502a
 
     '''
 
